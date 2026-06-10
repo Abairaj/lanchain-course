@@ -1,41 +1,60 @@
-import os
-
 from dotenv import load_dotenv
-from langchain_core.prompts import PromptTemplate
+from langchain.agents import create_agent
 from langchain_ollama import ChatOllama
+from langchain.tools import tool
+from langchain_core.messages import HumanMessage
+from pydantic import Field,BaseModel
+from tavily import TavilyClient
 
-load_dotenv()
+client = TavilyClient()
+
+class ResponseFormat(BaseModel):
+    
+    answer:str = Field(description='the response of the query')
+
 
 
 def main():
-    information = """
-    Elon Reeve Musk (/ˈiːlɒn/ EE-lon; born June 28, 1971) is a businessman and former public official known for his leadership of Tesla and SpaceX. Musk has been the wealthiest person in the world since 2025; as of June 2026, Forbes estimates his net worth to be US$835 billion.
+    load_dotenv()
 
-Born into the wealthy Musk family in Pretoria, South Africa, Musk emigrated in 1989 to Canada; he has Canadian citizenship since his mother was born there. He received bachelor's degrees in 1997 from the University of Pennsylvania before moving to California to pursue business ventures. In 1995, Musk co-founded the software company Zip2. Following its sale in 1999, he co-founded X.com, an online payment company that later merged to form PayPal, which was acquired by eBay in 2002. Musk also became an American citizen in 2002.
+    @tool
+    def search_web(query: str) -> str:
+        """
+        Searches the internet for information and returns
+        relevant results.
 
+        Use this tool for:
+        - Weather and climate questions
+        - Current events and news
+        - Information about cities, countries, and locations
+        - Facts that may change over time
 
-    """
+        Do not use this tool for:
+        - Simple arithmetic
+        - General reasoning
+        - Questions that can be answered from the conversation context
 
-    summary_template = """
-    given information {information} is about a person
-    1. give a summary about the person
-    2. give a fun fact about the person
-    """
+        Args:
+            query: Search query to execute.
 
-    prompt_template = PromptTemplate(
-        variables=["information"], template=summary_template
-    )
-
+        Returns:
+            Search result text.
+        """
+        print(f"querying the web with query: {query}")
+        return client.search(query)
+    
     llm = ChatOllama(
-        model="qwen3:8b",
-        temperature=0,
-    )
+    model="qwen3:8b",
+    temperature=0,
+)
+    tools = [search_web]
+    
+    agent = create_agent(model=llm,tools=tools,response_format=ResponseFormat)
+    
+    response = agent.invoke({"messages":HumanMessage(content="What is the climate in london")})
+    
+    print(response)
 
-    chain = prompt_template | llm
-
-    response = chain.invoke({"information": information})
-
-    print(response.content)
 
 
 if __name__ == "__main__":
